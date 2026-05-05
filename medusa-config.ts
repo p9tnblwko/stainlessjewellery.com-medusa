@@ -54,6 +54,9 @@ module.exports = defineConfig({
   },
   modules: [
     {
+      resolve: "./src/modules/product-custom-field",
+    },
+    {
       resolve: "@medusajs/medusa/file",
       options: {
         providers: [
