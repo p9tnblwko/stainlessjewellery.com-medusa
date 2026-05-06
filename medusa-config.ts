@@ -31,6 +31,7 @@ module.exports = defineConfig({
     },
   },
   admin: {
+    disable: process.env.DISABLE_MEDUSA_ADMIN === "true",
     vite: (config) => {
       return {
         server: {
