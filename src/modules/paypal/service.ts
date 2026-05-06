@@ -65,6 +65,9 @@ class PayPalPaymentProviderService extends AbstractPaymentProvider<Options> {
   constructor(container: InjectedDependencies, options: Options) {
     super(container, options)
 
+    console.log("PayPalPaymentProviderService");
+    console.log(options);
+
     this.logger_ = container.logger
     this.options_ = {
       environment: 'sandbox',
