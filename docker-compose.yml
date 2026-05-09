@@ -14,6 +14,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - medusa_network
+    command: >
+      postgres
+      -c log_min_duration_statement=500
+      -c log_statement=none
+      -c log_destination=stderr
+      -c logging_collector=off
+      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
 
   # Redis
   redis:
@@ -42,10 +49,12 @@ services:
       - NODE_ENV=development
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/medusa-store
       - REDIS_URL=redis://redis:6379
+      - DEBUG_STORE_PRODUCTS=true
     env_file:
       - .env
     volumes:
       - .:/server
+      - ./static:/server/static
       - /server/node_modules
     networks:
       - medusa_network
