@@ -2,6 +2,7 @@ import { createWriteStream } from "fs"
 import { mkdir, readFile, stat, unlink } from "fs/promises"
 import http from "http"
 import https from "https"
+import os from "os"
 import path from "path"
 import { pipeline } from "stream/promises"
 
@@ -31,7 +32,7 @@ type ImageProcessResult =
 type ProgressCounts = Record<ImageProcessResult, number>
 
 const DEFAULT_CSV_PATH = "./src/scripts/medusa_import_v4.csv"
-const DEFAULT_STATIC_DIR = "./static"
+const DEFAULT_STATIC_DIR = "~/medusa-images"
 const DEFAULT_STATIC_BASE_URL = "http://localhost:9000/static"
 const DEFAULT_CONCURRENCY = 20
 const PROGRESS_BAR_WIDTH = 30
@@ -129,6 +130,18 @@ function filenameFromUrl(value: string) {
 
 function normalizeStaticBaseUrl(value?: string) {
   return (value || DEFAULT_STATIC_BASE_URL).replace(/\/+$/, "")
+}
+
+function resolvePathFromCwd(value: string) {
+  if (value === "~") {
+    return os.homedir()
+  }
+
+  if (value.startsWith("~/")) {
+    return path.join(os.homedir(), value.slice(2))
+  }
+
+  return path.resolve(process.cwd(), value)
 }
 
 function parseConcurrency(value?: string) {
@@ -400,8 +413,7 @@ export default async function downloadMissingImages({ container }: ExecArgs) {
     process.cwd(),
     process.env.IMAGE_SOURCE_CSV || DEFAULT_CSV_PATH
   )
-  const staticDir = path.resolve(
-    process.cwd(),
+  const staticDir = resolvePathFromCwd(
     process.env.STATIC_IMAGE_DIR || DEFAULT_STATIC_DIR
   )
   const staticBaseUrl = normalizeStaticBaseUrl(process.env.STATIC_BASE_URL)
