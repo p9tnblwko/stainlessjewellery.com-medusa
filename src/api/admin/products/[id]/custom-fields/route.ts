@@ -7,6 +7,7 @@ const CUSTOM_FIELD_KEYS = [
   "finish_plating",
   "ring_style",
   "earring_style",
+  "plating",
 ] as const
 
 type ProductCustomFields = {
@@ -14,6 +15,7 @@ type ProductCustomFields = {
   finish_plating?: string[] | null
   ring_style?: string[] | null
   earring_style?: string[] | null
+  plating?: string[] | null
 }
 
 type ProductCustomFieldRecord = ProductCustomFields & {

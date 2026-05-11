@@ -15,6 +15,7 @@ type ProductCustomFields = {
   finish_plating: string[]
   ring_style: string[]
   earring_style: string[]
+  plating: string[]
 }
 
 type ProductCustomFieldsForm = {
@@ -22,6 +23,7 @@ type ProductCustomFieldsForm = {
   finish_plating: string
   ring_style: string
   earring_style: string
+  plating: string
 }
 
 type ProductCustomFieldsWidgetProps = {
@@ -35,6 +37,7 @@ const EMPTY_FIELDS: ProductCustomFieldsForm = {
   finish_plating: "",
   ring_style: "",
   earring_style: "",
+  plating: "",
 }
 
 const FIELD_CONFIG: {
@@ -62,6 +65,11 @@ const FIELD_CONFIG: {
     label: "Earring style",
     placeholder: "stud, hoop",
   },
+  {
+    key: "plating",
+    label: "Plating",
+    placeholder: "Gold, Rhodium",
+  },
 ]
 
 function toFormFields(value?: Partial<ProductCustomFields> | null) {
@@ -87,6 +95,7 @@ function toPayload(fields: ProductCustomFieldsForm): ProductCustomFields {
     finish_plating: [],
     ring_style: [],
     earring_style: [],
+    plating: [],
   })
 }
 

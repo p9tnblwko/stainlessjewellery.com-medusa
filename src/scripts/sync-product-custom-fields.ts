@@ -8,6 +8,7 @@ type CustomFieldKey =
   | "finish_plating"
   | "ring_style"
   | "earring_style"
+  | "plating"
 
 type ProductVariantWithMetadata = {
   id: string
@@ -25,6 +26,7 @@ const CUSTOM_FIELD_KEYS: CustomFieldKey[] = [
   "finish_plating",
   "ring_style",
   "earring_style",
+  "plating",
 ]
 
 const BATCH_SIZE = 500

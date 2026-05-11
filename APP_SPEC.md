@@ -9,7 +9,7 @@ The app is built on Medusa v2 and is intended to serve a separate storefront, li
 ## Product Goals
 
 - Provide a reliable ecommerce backend for stainless steel and fashion jewelry.
-- Support rich catalog browsing by category, collection, material, stone type, finish/plating, ring style, and earring style.
+- Support rich catalog browsing by category, collection, material, stone type, finish/plating, plating, ring style, and earring style.
 - Give admins a simple way to maintain jewelry-specific filter metadata on products.
 - Support PayPal checkout through a custom Medusa payment provider.
 - Support migration from Shopify image URLs and imported CSV product data.
@@ -72,6 +72,7 @@ Supported custom fields:
 - `finish_plating`
 - `ring_style`
 - `earring_style`
+- `plating`
 
 Each field stores an optional array of strings. These fields are designed for storefront filtering and merchandising.
 
@@ -85,6 +86,7 @@ The widget allows admins to edit:
 - Finish plating
 - Ring style
 - Earring style
+- Plating
 
 Input format is comma-separated text. The backend normalizes values into string arrays and removes empty values.
 
@@ -108,6 +110,7 @@ Supported query filters:
 - `finish_plating`
 - `ring_style`
 - `earring_style`
+- `plating`
 - `limit`
 - `offset`
 - `fields`
@@ -116,7 +119,7 @@ Filtering behavior uses overlap matching, so a product matches when at least one
 
 ### Product Material Filtering
 
-The app extends `GET /store/products` with a custom `material` query filter.
+The app extends `GET /store/products` with custom `material` and `plating` query filters.
 
 Supported material values:
 
@@ -130,6 +133,20 @@ Supported material values:
 Invalid material values return an invalid data error.
 
 The material filter can be combined with standard Medusa filters such as category filters.
+
+Supported plating values:
+
+- Antique
+- Black
+- Gold
+- No Plating
+- Rhodium
+- Rose Gold
+- Two Tone Black
+- Two Tone Blue
+- Two Tone Gold
+
+The plating filter matches products through their custom field record and can be combined with standard Medusa product filters.
 
 ### Payment
 
@@ -169,6 +186,7 @@ The repo includes operational scripts for:
 - Printing collection ID maps
 - Syncing custom product fields from variant metadata
 - Syncing product materials from descriptions
+- Syncing canonical product plating values from product descriptions
 - Downloading missing images from CSV sources into `~/medusa-images`
 - Rewriting Shopify image URLs for dev and prod static URLs
 - Generating a storefront sitemap
@@ -208,6 +226,7 @@ Fields:
 - `finish_plating`: nullable string array
 - `ring_style`: nullable string array
 - `earring_style`: nullable string array
+- `plating`: nullable string array
 
 Business rules:
 
@@ -230,7 +249,7 @@ Business rules:
 ### Customer Filters Products By Jewelry Attributes
 
 1. Customer chooses one or more filters in the storefront.
-2. Storefront calls `GET /store/products/custom-fields` with query values.
+2. Storefront calls `GET /store/products` with `plating[]` or calls `GET /store/products/custom-fields` with custom field query values.
 3. Backend finds matching custom field records.
 4. Backend loads published products for the matching product IDs.
 5. Response includes products and their custom fields.
@@ -258,6 +277,26 @@ Business rules:
 2. Operator rewrites Shopify image URLs to static Medusa URLs.
 3. Dev script targets `http://localhost:9000/static`.
 4. Prod script targets `https://api.stainlessjewellery.com/static`.
+
+### Operator Syncs Product Plating
+
+1. Operator runs `npm run sync:product-plating`.
+2. Script reads products from the Medusa database.
+3. Script detects plating values from product descriptions.
+4. Script maps source values into canonical storefront filters.
+5. Script creates or updates product custom field records with `plating`.
+
+Canonical plating values:
+
+- No Plating
+- Rhodium
+- Gold
+- Rose Gold
+- Black
+- Two Tone Gold
+- Two Tone Black
+- Two Tone Blue
+- Antique
 
 ## Technical Architecture
 
@@ -358,7 +397,8 @@ Request body:
   "stone_type": ["diamond", "pearl"],
   "finish_plating": ["gold"],
   "ring_style": ["stackable"],
-  "earring_style": null
+  "earring_style": null,
+  "plating": ["Gold"]
 }
 ```
 
@@ -376,6 +416,7 @@ Query params:
 - `finish_plating`
 - `ring_style`
 - `earring_style`
+- `plating`
 - `limit`
 - `offset`
 - `fields`
@@ -408,6 +449,14 @@ Can be combined with standard product filters.
 
 Returns the standard Medusa store products response.
 
+### Store Products Plating Filter
+
+`GET /store/products?plating[]=Gold`
+
+Can be combined with standard product filters.
+
+Returns the standard Medusa store products response.
+
 ## Testing
 
 Current integration coverage includes:
@@ -421,6 +470,7 @@ Recommended additional tests:
 
 - Admin custom fields create/update/get
 - Store custom fields filtering
+- Store custom fields filtering by plating
 - Workflow hook upsert on product create/update
 - Workflow hook cleanup on product delete
 - PayPal provider status mapping with mocked PayPal responses
@@ -432,7 +482,7 @@ The current backend supports the core MVP when:
 
 - Products, variants, prices, images, categories, collections, and tags are seeded/imported.
 - Product custom fields are populated for filterable jewelry attributes.
-- Storefront can browse products by category, collection, tag, material, and custom fields.
+- Storefront can browse products by category, collection, tag, material, plating, and custom fields.
 - PayPal checkout works in sandbox and production configurations.
 - Image URLs resolve from the configured static host.
 - Sitemap is generated into the storefront public directory.
@@ -442,6 +492,7 @@ The current backend supports the core MVP when:
 - PayPal provider contains console logging of provider initialization and options; this should be removed before production because it may expose sensitive configuration.
 - Custom field filters currently live in a separate `/store/products/custom-fields` endpoint instead of the main `/store/products` endpoint.
 - Custom field values are free-form text arrays, so inconsistent spelling or casing can fragment filters.
+- The `plating` description sync normalizes known source values, but new unmapped source values must be added to the script mapping.
 - Local file storage is simple but may need S3 or another production file provider if image volume or deployment topology requires it.
 - Several migration scripts are operational utilities and should be run carefully with dry-run options where available.
 - The default README is still the Medusa starter README and does not document this project's custom behavior.
@@ -467,4 +518,3 @@ The current backend supports the core MVP when:
 - Add webhook tests for PayPal.
 - Add deployment documentation.
 - Add backup/restore notes for product and custom field data.
-

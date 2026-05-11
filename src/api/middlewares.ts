@@ -10,11 +10,14 @@ import {
 } from "@medusajs/framework/utils"
 import { z } from "@medusajs/deps/zod"
 
+import { PRODUCT_CUSTOM_FIELD_MODULE } from "../modules/product-custom-field"
+
 const productCustomFieldsValidator = {
   stone_type: z.array(z.string()).nullable().optional(),
   finish_plating: z.array(z.string()).nullable().optional(),
   ring_style: z.array(z.string()).nullable().optional(),
   earring_style: z.array(z.string()).nullable().optional(),
+  plating: z.array(z.string()).nullable().optional(),
 }
 
 const DEBUG_STORE_PRODUCTS =
@@ -28,6 +31,17 @@ const SUPPORTED_PRODUCT_MATERIALS = new Set([
   "Stainless Steel",
   "Sterling Silver",
   "White Metal",
+])
+const SUPPORTED_PRODUCT_PLATINGS = new Set([
+  "Antique",
+  "Black",
+  "Gold",
+  "No Plating",
+  "Rhodium",
+  "Rose Gold",
+  "Two Tone Black",
+  "Two Tone Blue",
+  "Two Tone Gold",
 ])
 
 function getDurationMs(start: bigint) {
@@ -54,7 +68,44 @@ function getMaterialQueryValues(value: unknown) {
     .filter(Boolean)
 }
 
-function allowStoreProductsMaterialFilter(
+function getFilterValues(value: unknown) {
+  return (Array.isArray(value) ? value : [value]).filter(
+    (item): item is string => typeof item === "string" && Boolean(item)
+  )
+}
+
+function addStoreProductsFilters(
+  req: MedusaRequest,
+  filters: Record<string, unknown>
+) {
+  let filterableFields: Record<string, unknown> | undefined
+
+  Object.defineProperty(req, "filterableFields", {
+    configurable: true,
+    get() {
+      return filterableFields
+    },
+    set(value: Record<string, unknown>) {
+      const nextFilters = {
+        ...value,
+        ...filters,
+      }
+
+      if (value.id && filters.id) {
+        const existingIds = getFilterValues(value.id)
+        const customFieldIds = new Set(getFilterValues(filters.id))
+
+        nextFilters.id = existingIds.filter((id) => customFieldIds.has(id))
+      }
+
+      filterableFields = {
+        ...nextFilters,
+      }
+    },
+  })
+}
+
+async function allowStoreProductsCustomFilters(
   req: MedusaRequest,
   res: MedusaResponse,
   next: MedusaNextFunction
@@ -62,7 +113,7 @@ function allowStoreProductsMaterialFilter(
   if (
     req.method !== "GET" ||
     req.originalUrl.split("?")[0] !== "/store/products" ||
-    !("material" in req.query)
+    (!("material" in req.query) && !("plating" in req.query))
   ) {
     return next()
   }
@@ -80,25 +131,49 @@ function allowStoreProductsMaterialFilter(
   }
 
   delete req.query.material
+  const platingValues = getMaterialQueryValues(req.query.plating)
+  const invalidPlatings = platingValues.filter(
+    (plating) => !SUPPORTED_PRODUCT_PLATINGS.has(plating)
+  )
 
-  if (!materials.length) {
+  if (invalidPlatings.length) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      `Invalid plating filter value: ${invalidPlatings.join(", ")}`
+    )
+  }
+
+  delete req.query.plating
+
+  if (!materials.length && !platingValues.length) {
     return next()
   }
 
-  let filterableFields: Record<string, unknown> | undefined
+  const filters: Record<string, unknown> = {}
 
-  Object.defineProperty(req, "filterableFields", {
-    configurable: true,
-    get() {
-      return filterableFields
-    },
-    set(value: Record<string, unknown>) {
-      filterableFields = {
-        ...value,
-        material: materials,
+  if (materials.length) {
+    filters.material = materials
+  }
+
+  if (platingValues.length) {
+    const customFieldService = req.scope.resolve(
+      PRODUCT_CUSTOM_FIELD_MODULE
+    ) as any
+    const customFields = (await customFieldService.listProductCustomFields(
+      {
+        plating: { $overlap: platingValues },
+      },
+      {
+        select: ["product_id"],
       }
-    },
-  })
+    )) as Array<{ product_id: string }>
+
+    filters.id = customFields.length
+      ? customFields.map((record) => record.product_id)
+      : ["__no_matching_product__"]
+  }
+
+  addStoreProductsFilters(req, filters)
 
   return next()
 }
@@ -219,7 +294,7 @@ export default defineMiddlewares({
   routes: [
     {
       matcher: "/store/products",
-      middlewares: [allowStoreProductsMaterialFilter],
+      middlewares: [allowStoreProductsCustomFilters],
     },
     {
       matcher: "/store/products",

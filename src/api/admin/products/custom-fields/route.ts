@@ -7,6 +7,7 @@ const CUSTOM_FIELD_KEYS = [
   "finish_plating",
   "ring_style",
   "earring_style",
+  "plating",
 ] as const
 
 type ProductCustomFieldRecord = {
@@ -15,6 +16,7 @@ type ProductCustomFieldRecord = {
   finish_plating?: string[] | null
   ring_style?: string[] | null
   earring_style?: string[] | null
+  plating?: string[] | null
 }
 
 function getStringQueryValue(value: unknown): string | undefined {

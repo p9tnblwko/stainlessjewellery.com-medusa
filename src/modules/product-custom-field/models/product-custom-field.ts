@@ -11,6 +11,7 @@ const ProductCustomField = model.define("product_custom_field", {
   earring_style: model
     .array()
     .nullable(),
+  plating: model.array().nullable(),
 })
 
 export default ProductCustomField
