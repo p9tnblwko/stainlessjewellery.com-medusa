@@ -43,6 +43,15 @@ const SUPPORTED_PRODUCT_PLATINGS = new Set([
   "Two Tone Blue",
   "Two Tone Gold",
 ])
+const STORE_PRODUCT_CUSTOM_FIELD_FILTERS = [
+  "stone_type",
+  "plating",
+  "ring_style",
+  "earring_style",
+] as const
+
+type StoreProductCustomFieldFilter =
+  (typeof STORE_PRODUCT_CUSTOM_FIELD_FILTERS)[number]
 
 function getDurationMs(start: bigint) {
   return Number(process.hrtime.bigint() - start) / 1_000_000
@@ -113,7 +122,8 @@ async function allowStoreProductsCustomFilters(
   if (
     req.method !== "GET" ||
     req.originalUrl.split("?")[0] !== "/store/products" ||
-    (!("material" in req.query) && !("plating" in req.query))
+    (!("material" in req.query) &&
+      !STORE_PRODUCT_CUSTOM_FIELD_FILTERS.some((key) => key in req.query))
   ) {
     return next()
   }
@@ -131,7 +141,20 @@ async function allowStoreProductsCustomFilters(
   }
 
   delete req.query.material
-  const platingValues = getMaterialQueryValues(req.query.plating)
+  const customFieldValues = STORE_PRODUCT_CUSTOM_FIELD_FILTERS.reduce<
+    Partial<Record<StoreProductCustomFieldFilter, string[]>>
+  >((acc, key) => {
+    const values = getMaterialQueryValues(req.query[key])
+
+    if (values.length) {
+      acc[key] = values
+    }
+
+    delete req.query[key]
+
+    return acc
+  }, {})
+  const platingValues = customFieldValues.plating ?? []
   const invalidPlatings = platingValues.filter(
     (plating) => !SUPPORTED_PRODUCT_PLATINGS.has(plating)
   )
@@ -142,10 +165,17 @@ async function allowStoreProductsCustomFilters(
       `Invalid plating filter value: ${invalidPlatings.join(", ")}`
     )
   }
+  const customFieldFilters = Object.entries(customFieldValues).reduce<
+    Record<string, unknown>
+  >((acc, [key, values]) => {
+    if (values?.length) {
+      acc[key] = { $overlap: values }
+    }
 
-  delete req.query.plating
+    return acc
+  }, {})
 
-  if (!materials.length && !platingValues.length) {
+  if (!materials.length && !Object.keys(customFieldFilters).length) {
     return next()
   }
 
@@ -155,14 +185,12 @@ async function allowStoreProductsCustomFilters(
     filters.material = materials
   }
 
-  if (platingValues.length) {
+  if (Object.keys(customFieldFilters).length) {
     const customFieldService = req.scope.resolve(
       PRODUCT_CUSTOM_FIELD_MODULE
     ) as any
     const customFields = (await customFieldService.listProductCustomFields(
-      {
-        plating: { $overlap: platingValues },
-      },
+      customFieldFilters,
       {
         select: ["product_id"],
       }
