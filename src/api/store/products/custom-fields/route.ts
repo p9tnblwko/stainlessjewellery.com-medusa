@@ -62,6 +62,8 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       ? fields
       : ["id", ...fields]
     : undefined
+  const customFieldsOnly =
+    fields?.length === 1 && fields[0] === "custom_fields"
 
   const customFieldService = req.scope.resolve(PRODUCT_CUSTOM_FIELD_MODULE) as any
   const productService = req.scope.resolve("product")
@@ -78,6 +80,21 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     res.json({
       products: [],
       count: 0,
+      limit,
+      offset,
+    })
+    return
+  }
+
+  if (customFieldsOnly) {
+    res.json({
+      products: customFields
+        .slice(offset, offset + limit)
+        .map((record) => ({
+          id: record.product_id,
+          custom_fields: record,
+        })),
+      count: customFields.length,
       limit,
       offset,
     })
