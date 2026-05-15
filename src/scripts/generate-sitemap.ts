@@ -28,14 +28,8 @@ type CategoryRecord = {
   updated_at?: string | Date | null
 }
 
-type CollectionRecord = {
-  handle?: string | null
-  updated_at?: string | Date | null
-}
-
 const DEFAULT_STATIC_ROUTES: SitemapEntry[] = [
   { loc: "/", changefreq: "weekly", priority: 1 },
-  { loc: "/collection", changefreq: "weekly", priority: 0.8 },
   { loc: "/about", changefreq: "monthly", priority: 0.5 },
   { loc: "/care", changefreq: "monthly", priority: 0.5 },
   { loc: "/contact", changefreq: "monthly", priority: 0.5 },
@@ -160,17 +154,6 @@ function productEntries(products: ProductRecord[]): SitemapEntry[] {
     }))
 }
 
-function collectionEntries(collections: CollectionRecord[]): SitemapEntry[] {
-  return collections
-    .filter((collection) => collection.handle)
-    .map((collection) => ({
-      loc: `/collection/${collection.handle}`,
-      lastmod: collection.updated_at,
-      changefreq: "weekly",
-      priority: 0.7,
-    }))
-}
-
 function categoryEntries(categories: CategoryRecord[]): SitemapEntry[] {
   const categoryById = new Map<string, CategoryRecord>()
 
@@ -221,7 +204,7 @@ export default async function generateSitemap({ container }: ExecArgs) {
     process.env.SITEMAP_OUTPUT_PATH || DEFAULT_OUTPUT_PATH
   )
 
-  const [products, categories, collections] = await Promise.all([
+  const [products, categories] = await Promise.all([
     listAll<ProductRecord>((skip, take) =>
       productModuleService.listProducts(
         {},
@@ -246,19 +229,12 @@ export default async function generateSitemap({ container }: ExecArgs) {
         }
       )
     ),
-    listAll<CollectionRecord>((skip, take) =>
-      productModuleService.listProductCollections(
-        {},
-        { select: ["handle", "updated_at"], skip, take }
-      )
-    ),
   ])
 
   const entries = [
     ...DEFAULT_STATIC_ROUTES,
     ...productEntries(products),
     ...categoryEntries(categories),
-    ...collectionEntries(collections),
   ]
   const sitemap = renderSitemap(entries, baseUrl)
 
