@@ -152,6 +152,21 @@ function collectDescendantIds(
   return descendantIds
 }
 
+function categoriesByIds(
+  categories: ProductCategoryRecord[],
+  categoryIds: Set<string>
+) {
+  return categories
+    .filter((category) => categoryIds.has(category.id))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function formatCategoryScope(categories: ProductCategoryRecord[]) {
+  return categories
+    .map((category) => `${category.name} (${category.handle})`)
+    .join(", ")
+}
+
 async function getAllCategories(productService: any) {
   return (await productService.listProductCategories(
     {},
@@ -295,17 +310,21 @@ export default async function assignEarringsCategory({
   )
   const ringCategoryIds = collectDescendantIds(categories, ringsCategory.id)
   ringCategoryIds.add(ringsCategory.id)
+  const ringCategories = categoriesByIds(categories, ringCategoryIds)
 
   let scanned = 0
   let matchedByName = 0
-  let matchedInRings = 0
   let updated = 0
   let unchanged = 0
-  let skippedOutsideRings = 0
   let totalProducts = 0
 
-  logger.info("Scanning for earring products assigned to Rings...")
+  logger.info("Scanning for earring products assigned to Rings and subcategories...")
   logger.info(`Rings category: ${ringsCategory.name} (${ringsCategory.id})`)
+  logger.info(
+    `Rings scope: ${ringCategories.length} categories - ${formatCategoryScope(
+      ringCategories
+    )}`
+  )
   logger.info(
     `Earrings category: ${earringsCategory.name} (${earringsCategory.id})`
   )
@@ -326,7 +345,11 @@ export default async function assignEarringsCategory({
         ? Math.min(options.batchSize, remaining)
         : options.batchSize
     const [products, count] = (await productService.listAndCountProducts(
-      {},
+      {
+        categories: {
+          id: [...ringCategoryIds],
+        },
+      },
       {
         select: ["id", "title", "handle"],
         relations: ["categories"],
@@ -353,13 +376,6 @@ export default async function assignEarringsCategory({
       }
 
       matchedByName += 1
-
-      if (!hasAnyCategory(product, ringCategoryIds)) {
-        skippedOutsideRings += 1
-        continue
-      }
-
-      matchedInRings += 1
 
       const subcategoryRule = inferEarringSubcategory(title)
       const subcategory = subcategoryRule
@@ -417,8 +433,8 @@ export default async function assignEarringsCategory({
   }
 
   logger.info(
-    `Done. Scanned ${scanned} products. Matched ${matchedByName} earring names; ${matchedInRings} were in Rings. ${
+    `Done. Scanned ${scanned} Rings products. Matched ${matchedByName} earring names. ${
       options.dryRun ? "Would update" : "Updated"
-    } ${updated}, unchanged ${unchanged}, skipped outside Rings ${skippedOutsideRings}.`
+    } ${updated}, unchanged ${unchanged}.`
   )
 }
