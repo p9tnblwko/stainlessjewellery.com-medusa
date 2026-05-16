@@ -318,8 +318,22 @@ function debugStoreProductsRequest(
   return next()
 }
 
+function setXRobotsTag(
+  req: MedusaRequest,
+  res: MedusaResponse,
+  next: MedusaNextFunction
+) {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow")
+
+  return next()
+}
+
 export default defineMiddlewares({
   routes: [
+    {
+      matcher: /.*/,
+      middlewares: [setXRobotsTag],
+    },
     {
       matcher: "/store/products",
       middlewares: [allowStoreProductsCustomFilters],
