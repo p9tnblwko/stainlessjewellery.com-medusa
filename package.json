@@ -28,6 +28,7 @@
     "@medusajs/cli": "2.13.1",
     "@medusajs/framework": "2.13.1",
     "@medusajs/medusa": "2.13.1",
+    "@medusajs/workflows-sdk": "2.13.1",
     "@paypal/paypal-server-sdk": "^2.2.0",
     "ioredis": "^5.4.1",
     "tsconfig-paths": "^4.2.0",

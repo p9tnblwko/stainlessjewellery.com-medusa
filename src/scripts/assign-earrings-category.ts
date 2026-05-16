@@ -1,6 +1,5 @@
 import type { ExecArgs } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
-import { updateProductsWorkflow } from "@medusajs/medusa/core-flows"
 
 type ProductCategoryRecord = {
   id: string
@@ -404,11 +403,7 @@ export default async function assignEarringsCategory({
 
     if (updates.length) {
       if (!options.dryRun) {
-        await updateProductsWorkflow(container).run({
-          input: {
-            products: updates,
-          },
-        })
+        await productService.upsertProducts(updates)
       }
 
       updated += updates.length

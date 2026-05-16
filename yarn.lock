@@ -11246,6 +11246,7 @@ __metadata:
     "@medusajs/framework": "npm:2.13.1"
     "@medusajs/medusa": "npm:2.13.1"
     "@medusajs/test-utils": "npm:2.13.1"
+    "@medusajs/workflows-sdk": "npm:2.13.1"
     "@paypal/paypal-server-sdk": "npm:^2.2.0"
     "@swc/core": "npm:^1.7.28"
     "@swc/jest": "npm:^0.2.36"
