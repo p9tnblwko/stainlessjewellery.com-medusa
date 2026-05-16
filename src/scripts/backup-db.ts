@@ -6,6 +6,7 @@ import { stdin as input, stdout as output } from "process"
 import { spawn } from "child_process"
 
 const BACKUP_DIR = ".backup"
+const DEFAULT_POSTGRES_PORT = "5432"
 
 function getDatabaseUrl(): string {
   if (!process.env.DATABASE_URL) {
@@ -13,6 +14,22 @@ function getDatabaseUrl(): string {
   }
 
   return process.env.DATABASE_URL
+}
+
+function getPostgresEnv(databaseUrl: string): NodeJS.ProcessEnv {
+  const url = new URL(databaseUrl)
+  const database = decodeURIComponent(url.pathname.replace(/^\//, ""))
+  const sslMode = url.searchParams.get("sslmode")
+
+  return {
+    ...process.env,
+    PGHOST: url.hostname,
+    PGPORT: url.port || DEFAULT_POSTGRES_PORT,
+    PGUSER: decodeURIComponent(url.username),
+    PGPASSWORD: decodeURIComponent(url.password),
+    PGDATABASE: database,
+    ...(sslMode ? { PGSSLMODE: sslMode } : {}),
+  }
 }
 
 function slugify(value: string): string {
@@ -46,10 +63,7 @@ function runBackup(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const backup = spawn("pg_dump", ["--clean", "--if-exists"], {
-      env: {
-        ...process.env,
-        PGDATABASE: databaseUrl,
-      },
+      env: getPostgresEnv(databaseUrl),
     })
 
     const file = createWriteStream(targetFile, { flags: "wx" })
