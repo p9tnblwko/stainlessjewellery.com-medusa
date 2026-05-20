@@ -29,6 +29,7 @@ type SubcategoryRule = {
 }
 
 const DEFAULT_BATCH_SIZE = 250
+const RINGS_HANDLE = "rings"
 const NECKLACES_NAME = "Necklaces"
 const NECKLACES_HANDLE = "necklaces"
 const NECKLACE_NAME_PATTERN =
@@ -114,6 +115,48 @@ function inferNecklaceSubcategory(title: string) {
   return NECKLACE_SUBCATEGORY_RULES.find((rule) => rule.pattern.test(title))
 }
 
+function collectDescendantIds(
+  categories: ProductCategoryRecord[],
+  parentId: string
+) {
+  const descendantIds = new Set<string>()
+  let changed = true
+
+  while (changed) {
+    changed = false
+
+    categories.forEach((category) => {
+      const parentCategoryId = category.parent_category_id
+
+      if (
+        parentCategoryId &&
+        (parentCategoryId === parentId || descendantIds.has(parentCategoryId)) &&
+        !descendantIds.has(category.id)
+      ) {
+        descendantIds.add(category.id)
+        changed = true
+      }
+    })
+  }
+
+  return descendantIds
+}
+
+function categoriesByIds(
+  categories: ProductCategoryRecord[],
+  categoryIds: Set<string>
+) {
+  return categories
+    .filter((category) => categoryIds.has(category.id))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function formatCategoryScope(categories: ProductCategoryRecord[]) {
+  return categories
+    .map((category) => `${category.name} (${category.handle})`)
+    .join(", ")
+}
+
 function sameCategoryIds(left: string[], right: string[]) {
   const normalizedLeft = [...new Set(left)].sort()
   const normalizedRight = [...new Set(right)].sort()
@@ -126,6 +169,7 @@ function sameCategoryIds(left: string[], right: string[]) {
 
 function buildCategoryIds(
   product: ProductRecord,
+  ringCategoryIds: Set<string>,
   targetCategoryIds: string[],
   replaceAllCategories: boolean
 ) {
@@ -135,8 +179,11 @@ function buildCategoryIds(
 
   const currentCategoryIds =
     product.categories?.map((category) => category.id) ?? []
+  const preservedCategoryIds = currentCategoryIds.filter(
+    (categoryId) => !ringCategoryIds.has(categoryId)
+  )
 
-  return [...new Set([...currentCategoryIds, ...targetCategoryIds])]
+  return [...new Set([...preservedCategoryIds, ...targetCategoryIds])]
 }
 
 async function getAllCategories(productService: any) {
@@ -232,11 +279,22 @@ export default async function assignNecklacesCategory({
   const productService = container.resolve(Modules.PRODUCT) as any
   const options = parseOptions(args)
   const categories = await getAllCategories(productService)
+  const ringsCategory = categories.find((category) =>
+    matchesNameOrHandle(category, "Rings", RINGS_HANDLE)
+  )
+
+  if (!ringsCategory) {
+    throw new Error(`Product category was not found: ${RINGS_HANDLE}`)
+  }
+
   const necklacesCategory = await getOrCreateNecklacesCategory(
     productService,
     categories,
     options.dryRun
   )
+  const ringCategoryIds = collectDescendantIds(categories, ringsCategory.id)
+  ringCategoryIds.add(ringsCategory.id)
+  const ringCategories = categoriesByIds(categories, ringCategoryIds)
 
   let scanned = 0
   let matchedByName = 0
@@ -244,7 +302,13 @@ export default async function assignNecklacesCategory({
   let unchanged = 0
   let totalProducts = 0
 
-  logger.info("Scanning for necklace products by product title...")
+  logger.info("Scanning for necklace products assigned to Rings and subcategories...")
+  logger.info(`Rings category: ${ringsCategory.name} (${ringsCategory.id})`)
+  logger.info(
+    `Rings scope: ${ringCategories.length} categories - ${formatCategoryScope(
+      ringCategories
+    )}`
+  )
   logger.info(
     `Necklaces category: ${necklacesCategory.name} (${necklacesCategory.id})`
   )
@@ -265,7 +329,11 @@ export default async function assignNecklacesCategory({
         ? Math.min(options.batchSize, remaining)
         : options.batchSize
     const [products, count] = (await productService.listAndCountProducts(
-      {},
+      {
+        categories: {
+          id: [...ringCategoryIds],
+        },
+      },
       {
         select: ["id", "title", "handle"],
         relations: ["categories"],
@@ -309,6 +377,7 @@ export default async function assignNecklacesCategory({
       ]
       const nextCategoryIds = buildCategoryIds(
         product,
+        ringCategoryIds,
         targetCategoryIds,
         options.replaceAllCategories
       )
@@ -352,7 +421,7 @@ export default async function assignNecklacesCategory({
   }
 
   logger.info(
-    `Done. Scanned ${scanned} products. Matched ${matchedByName} necklace names. ${
+    `Done. Scanned ${scanned} Rings products. Matched ${matchedByName} necklace names. ${
       options.dryRun ? "Would update" : "Updated"
     } ${updated}, unchanged ${unchanged}.`
   )
