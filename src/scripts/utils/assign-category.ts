@@ -34,9 +34,11 @@ export type SubcategoryRule = {
   pattern: RegExp
 }
 
-type RingProductAssignmentConfig = {
+type CategoryProductAssignmentConfig = {
   args?: string[]
   container: ExecArgs["container"]
+  sourceName: string
+  sourceHandle: string
   targetName: string
   targetHandle: string
   matchLabel: string
@@ -261,26 +263,28 @@ export async function findCollectionByTitleOrHandle(
   )
 }
 
-export async function assignRingProductsToCategory({
+export async function assignProductsFromCategoryToCategory({
   args,
   container,
+  sourceName,
+  sourceHandle,
   targetName,
   targetHandle,
   matchLabel,
   namePattern,
   source,
   subcategoryRules,
-}: RingProductAssignmentConfig) {
+}: CategoryProductAssignmentConfig) {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
   const productService = container.resolve(Modules.PRODUCT) as any
   const options = parseAssignOptions(args)
   const categories = await getAllCategories(productService)
-  const ringsCategory = categories.find((category) =>
-    matchesNameOrHandle(category, "Rings", RINGS_HANDLE)
+  const sourceCategory = categories.find((category) =>
+    matchesNameOrHandle(category, sourceName, sourceHandle)
   )
 
-  if (!ringsCategory) {
-    throw new Error(`Product category was not found: ${RINGS_HANDLE}`)
+  if (!sourceCategory) {
+    throw new Error(`Product category was not found: ${sourceHandle}`)
   }
 
   const targetCategory = await getOrCreateCategory(
@@ -298,9 +302,9 @@ export async function assignRingProductsToCategory({
     throw new Error(`Product category was not found: ${targetHandle}`)
   }
 
-  const ringCategoryIds = collectDescendantIds(categories, ringsCategory.id)
-  ringCategoryIds.add(ringsCategory.id)
-  const ringCategories = categoriesByIds(categories, ringCategoryIds)
+  const sourceCategoryIds = collectDescendantIds(categories, sourceCategory.id)
+  sourceCategoryIds.add(sourceCategory.id)
+  const sourceCategories = categoriesByIds(categories, sourceCategoryIds)
 
   let scanned = 0
   let matchedByName = 0
@@ -308,11 +312,17 @@ export async function assignRingProductsToCategory({
   let unchanged = 0
   let totalProducts = 0
 
-  logger.info(`Scanning for ${matchLabel} products assigned to Rings and subcategories...`)
-  logger.info(`Rings category: ${ringsCategory.name} (${ringsCategory.id})`)
   logger.info(
-    `Rings scope: ${ringCategories.length} categories - ${formatCategoryScope(
-      ringCategories
+    `Scanning for ${matchLabel} products assigned to ${sourceName} and subcategories...`
+  )
+  logger.info(
+    `${sourceName} category: ${sourceCategory.name} (${sourceCategory.id})`
+  )
+  logger.info(
+    `${sourceName} scope: ${
+      sourceCategories.length
+    } categories - ${formatCategoryScope(
+      sourceCategories
     )}`
   )
   logger.info(`${targetName} category: ${targetCategory.name} (${targetCategory.id})`)
@@ -335,7 +345,7 @@ export async function assignRingProductsToCategory({
     const [products, count] = (await productService.listAndCountProducts(
       {
         categories: {
-          id: [...ringCategoryIds],
+          id: [...sourceCategoryIds],
         },
       },
       {
@@ -385,7 +395,7 @@ export async function assignRingProductsToCategory({
       ]
       const nextCategoryIds = buildCategoryIds(
         product,
-        ringCategoryIds,
+        sourceCategoryIds,
         targetCategoryIds,
         options.replaceAllCategories
       )
@@ -425,8 +435,18 @@ export async function assignRingProductsToCategory({
   }
 
   logger.info(
-    `Done. Scanned ${scanned} Rings products. Matched ${matchedByName} ${matchLabel} names. ${
+    `Done. Scanned ${scanned} ${sourceName} products. Matched ${matchedByName} ${matchLabel} names. ${
       options.dryRun ? "Would update" : "Updated"
     } ${updated}, unchanged ${unchanged}.`
   )
+}
+
+export async function assignRingProductsToCategory(
+  config: Omit<CategoryProductAssignmentConfig, "sourceName" | "sourceHandle">
+) {
+  await assignProductsFromCategoryToCategory({
+    ...config,
+    sourceName: "Rings",
+    sourceHandle: RINGS_HANDLE,
+  })
 }
