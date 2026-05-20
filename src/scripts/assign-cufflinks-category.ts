@@ -1,73 +1,42 @@
 import type { ExecArgs } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
-
-type ProductCategoryRecord = {
-  id: string
-  name: string
-  handle: string
-}
-
-type ProductCollectionRecord = {
-  id: string
-  title: string
-  handle: string
-}
-
-type ProductRecord = {
-  id: string
-  title: string
-  handle: string
-  categories?: ProductCategoryRecord[] | null
-}
+import {
+  DEFAULT_BATCH_SIZE,
+  findCollectionByTitleOrHandle,
+  getAllCategories,
+  getOrCreateCategory,
+  sameCategoryIds,
+  type ProductRecord,
+} from "./utils/assign-category"
 
 const CATEGORY_NAME = "Cufflinks"
 const CATEGORY_HANDLE = "cufflinks"
 const COLLECTION_TITLE = "Cufflinks"
-const BATCH_SIZE = 250
-
-async function getOrCreateCufflinksCategory(productService: any) {
-  const existingCategories = (await productService.listProductCategories(
-    { handle: CATEGORY_HANDLE },
-    { select: ["id", "name", "handle"], take: 1 }
-  )) as ProductCategoryRecord[]
-
-  if (existingCategories.length) {
-    return existingCategories[0]
-  }
-
-  const createdCategories = (await productService.createProductCategories([
-    {
-      name: CATEGORY_NAME,
-      handle: CATEGORY_HANDLE,
-      is_active: true,
-      is_internal: false,
-      metadata: {
-        source: "assign-cufflinks-category-script",
-      },
-    },
-  ])) as ProductCategoryRecord[]
-
-  return createdCategories[0]
-}
-
-async function getCufflinksCollection(productService: any) {
-  const collections = (await productService.listProductCollections(
-    {},
-    { select: ["id", "title", "handle"], take: 10000 }
-  )) as ProductCollectionRecord[]
-
-  return collections.find(
-    (collection) =>
-      collection.title === COLLECTION_TITLE || collection.handle === CATEGORY_HANDLE
-  )
-}
+const SOURCE = "assign-cufflinks-category-script"
 
 export default async function assignCufflinksCategory({ container }: ExecArgs) {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
   const productService = container.resolve(Modules.PRODUCT) as any
+  const categories = await getAllCategories(productService)
+  const category = await getOrCreateCategory(
+    productService,
+    categories,
+    {
+      name: CATEGORY_NAME,
+      handle: CATEGORY_HANDLE,
+      source: SOURCE,
+    },
+    false
+  )
+  const collection = await findCollectionByTitleOrHandle(
+    productService,
+    COLLECTION_TITLE,
+    CATEGORY_HANDLE
+  )
 
-  const category = await getOrCreateCufflinksCategory(productService)
-  const collection = await getCufflinksCollection(productService)
+  if (!category) {
+    throw new Error(`Product category was not found: ${CATEGORY_HANDLE}`)
+  }
 
   if (!collection) {
     throw new Error(`Product collection was not found: ${COLLECTION_TITLE}`)
@@ -82,14 +51,14 @@ export default async function assignCufflinksCategory({ container }: ExecArgs) {
   let unchanged = 0
   let totalProducts = 0
 
-  for (let offset = 0; ; offset += BATCH_SIZE) {
+  for (let offset = 0; ; offset += DEFAULT_BATCH_SIZE) {
     const [products, count] = (await productService.listAndCountProducts(
       { collection_id: collection.id },
       {
         select: ["id", "title", "handle"],
         relations: ["categories"],
         skip: offset,
-        take: BATCH_SIZE,
+        take: DEFAULT_BATCH_SIZE,
       }
     )) as [ProductRecord[], number]
 
@@ -104,10 +73,8 @@ export default async function assignCufflinksCategory({ container }: ExecArgs) {
 
       const currentCategoryIds =
         product.categories?.map((currentCategory) => currentCategory.id) ?? []
-      const alreadyOnlyCufflinks =
-        currentCategoryIds.length === 1 && currentCategoryIds[0] === category.id
 
-      if (alreadyOnlyCufflinks) {
+      if (sameCategoryIds(currentCategoryIds, [category.id])) {
         unchanged += 1
         continue
       }
