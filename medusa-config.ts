@@ -55,6 +55,9 @@ module.exports = defineConfig({
   },
   modules: [
     {
+      resolve: "./src/modules/orders",
+    },
+    {
       resolve: "./src/modules/product-custom-field",
     },
     {
